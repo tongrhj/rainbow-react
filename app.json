@@ -1,0 +1,12 @@
+{
+  "name": "Rainbow Rex",
+  "description": "Colour Picker Game",
+  "keywords": [ "react", "reactjs" ],
+  "repository": "https://github.com/tongrhj/rainbow-react",
+  "website": "http://rainbow-react.herokuapp.com",
+  "success_url": "/",
+  "env" : {
+    "BUILDPACK_URL": "https://github.com/heroku/heroku-buildpack-nodejs.git"
+  }
+}
+
