@@ -7,26 +7,40 @@ const GameEngine = React.createClass({
       points: 0,
       round: 1,
       answer: '',
-      decoy: ''
+      decoy: '',
+      timeRemaining: 5
     }
   },
   startGame(e) {
     e.preventDefault()
     this.setState({ gameMode: 'game'})
   },
-  handleColourButtonClick(e) {
+  restartGame(e) {
+    e.preventDefault()
+    let defaultValues = this.getInitialState()
+    defaultValues['gameMode'] = 'game'
+    this.setState(defaultValues)
+  },
+  handleCountdownComplete() {
+    this.setState({ gameMode: 'endOutOfTime' })
+  },
+  handleColourBtnClick(e) {
     e.preventDefault()
     this.setState({ colourClicked: e.target.value }, () => {
       this.state.colourClicked == this.state.answer ?
-                                    this.setNextRound() :
-                                    this.setState({ gameMode: 'end' })
+        this.setNextRound() :
+        this.setState({ gameMode: 'endWrongColour' })
     })
   },
   setNextRound() {
     this.incrementPoints()
+    this.incrementTime()
     this.setState({ round: this.state.round + 1 }, () => {
       this.setQuestionColour(this.state.colourClicked)
     })
+  },
+  incrementTime() {
+    this.setState({ timeRemaining: this.state.timeRemaining + 10 })
   },
   incrementPoints() {
     this.setState({ previousRoundPoints: this.state.points })
@@ -47,41 +61,52 @@ const GameEngine = React.createClass({
     const colourList = this.roundColours()
     const answer = colourList[Math.floor(colourList.length * Math.random())]
     const decoy = colourList[Math.floor(colourList.length * Math.random())]
-    if (answer == decoy || answer == previousRoundColour) {
-      this.setQuestionColour(previousRoundColour)
-    } else {
+    answer == decoy || answer == previousRoundColour ?
+      this.setQuestionColour(previousRoundColour) :
       this.setState({ answer, decoy })
+  },
+  gameScreen() {
+    switch (this.state.gameMode) {
+      case 'game':
+        return <div>
+                  <Countdown
+                    timeRemaining={ this.state.timeRemaining }
+                    handleCountdownComplete={ this.handleCountdownComplete }
+                  />
+                  <ColourForm
+                    answer={ this.state.answer }
+                    decoy={ this.state.decoy }
+                    points={ this.state.points }
+                    previousRoundPoints={ this.state.previousRoundPoints }
+                    colourList={ this.roundColours() }
+                    handleColourBtnClick={ this.handleColourBtnClick }
+                    setQuestionColour={ this.setQuestionColour }
+                  />
+                </div>
+        break;
+      case 'endOutOfTime':
+        return <EndScreen
+                points={ this.state.points }
+                handleStartBtnClick={ this.restartGame }>
+                You ran out of time.
+               </EndScreen>
+      case 'endWrongColour':
+        return <EndScreen
+                points={ this.state.points }
+                handleStartBtnClick={ this.restartGame }>
+                You clicked { this.state.colourClicked } instead of { this.state.answer }
+               </EndScreen>
+        break;
+      case 'start':
+      default:
+        return <StartScreen handleStartBtnClick={ this.startGame }/>
     }
   },
   render() {
-    let gameScreen;
-    switch (this.state.gameMode) {
-      case 'game':
-        gameScreen = <ColourForm
-                      answer={ this.state.answer }
-                      decoy={ this.state.decoy }
-                      points={ this.state.points }
-                      previousRoundPoints={ this.state.previousRoundPoints }
-                      colourList={ this.roundColours() }
-                      handleColourButtonClick={ this.handleColourButtonClick }
-                      setQuestionColour={ this.setQuestionColour }
-                     />
-        break;
-      case 'end':
-        gameScreen = <EndScreen
-                      points={ this.state.points }
-                      answer={ this.state.answer }
-                      colourClicked={ this.state.colourClicked }
-                      startGame={ this.startGame }
-                     />
-        break;
-      default:
-        gameScreen = <StartScreen startGame={ this.startGame }/>
-    }
     return (
       <div>
         <h1>Rainbow Rex</h1>
-        { gameScreen }
+        { this.gameScreen() }
       </div>
     )
   }
@@ -91,7 +116,7 @@ const StartScreen = React.createClass({
   render() {
     return (
       <div>
-        <StartGameBtn onClick={ this.props.startGame }>START</StartGameBtn>
+        <StartBtn onClick={ this.props.handleStartBtnClick }>START</StartBtn>
       </div>
     )
   }
@@ -103,23 +128,20 @@ const EndScreen = React.createClass({
       <div>
         <h1>GAME OVER</h1>
         <Points content={ this.props.points } />
-        <ColourChosen
-          content={ this.props.colourClicked }
-          answer={ this.props.answer}
-        />
+        <EndScreenMessage>{ this.props.children }</EndScreenMessage>
         <button>Share on Facebook</button>
         <br/>
-        <StartGameBtn onClick={ this.props.startGame }>Replay?</StartGameBtn>
+        <StartBtn onClick={ this.props.handleStartBtnClick }>Replay?</StartBtn>
       </div>
     )
   }
 })
 
-const StartGameBtn = React.createClass({
+const StartBtn = React.createClass({
   render() {
     return (
       <button
-        className='startGameBtn'
+        className='startBtn'
         onClick={ this.props.onClick }
       >
         { this.props.children }
@@ -134,7 +156,7 @@ const ColourForm = React.createClass({
   },
   render() {
     return (
-      <div className="colourForm">
+      <div className='colourForm'>
         <Question
           answer={ this.props.answer }
           decoy={ this.props.decoy }
@@ -145,7 +167,46 @@ const ColourForm = React.createClass({
         />
         <ColourButtons
           colourList={ this.props.colourList }
-          onClick={ this.props.handleColourButtonClick }
+          onClick={ this.props.handleColourBtnClick }
+        />
+      </div>
+    )
+  }
+})
+
+const CountdownTimer = React.createClass({
+  getInitialState() {
+    return {
+      secondsRemaining: this.props.secondsRemaining
+    }
+  },
+  tick() {
+    this.setState({secondsRemaining: this.state.secondsRemaining - 1})
+    if (this.state.secondsRemaining <= 0) {
+      clearInterval(this.interval)
+      if (this.props.completeCallback) { this.props.completeCallback(); }
+    }
+  },
+  componentDidMount() {
+    this.interval = setInterval(this.tick, 1000)
+  },
+  componentWillUnmount() {
+    clearInterval(this.interval)
+  },
+  render() {
+    return (
+      <div>Seconds Remaining: {this.state.secondsRemaining}</div>
+    )
+  }
+})
+
+const Countdown = React.createClass({
+  render () {
+    return (
+      <div>
+        <CountdownTimer
+          secondsRemaining={ this.props.timeRemaining }
+          completeCallback={ this.props.handleCountdownComplete }
         />
       </div>
     )
@@ -184,11 +245,11 @@ const Points = React.createClass({
   }
 })
 
-const ColourChosen = React.createClass({
+const EndScreenMessage = React.createClass({
   render() {
     return (
       <h5>
-        You chose { this.props.content } instead of { this.props.answer }
+        { this.props.children }
       </h5>
     )
   }
